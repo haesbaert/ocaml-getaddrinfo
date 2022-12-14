@@ -9,6 +9,7 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
+open Sexplib.Std
 
 (* keep in sync with C stubs *)
 type error =
@@ -26,6 +27,7 @@ type error =
   | EAI_SERVICE
   | EAI_SOCKTYPE
   | EAI_SYSTEM
+[@@deriving sexp]
 
 let error_to_string = function
   | EAI_ADDRFAMILY -> "address family for name not supported"
@@ -43,6 +45,32 @@ let error_to_string = function
   | EAI_SOCKTYPE   -> "ai_socktype not supported"
   | EAI_SYSTEM     -> "system error"
 
+type socket_domain = Unix.socket_domain =
+  | PF_UNIX                     (** Unix domain *)
+  | PF_INET                     (** Internet domain (IPv4) *)
+  | PF_INET6                    (** Internet domain (IPv6) *)
+[@@deriving sexp]
+(* type socket_domain = [%import: Unix.socket_domain] [@@deriving sexp] *)
+
+type socket_type = Unix.socket_type =
+  | SOCK_STREAM                (** Stream socket *)
+  | SOCK_DGRAM                  (** Datagram socket *)
+  | SOCK_RAW                    (** Raw socket *)
+  | SOCK_SEQPACKET              (** Sequenced packets socket *)
+[@@deriving sexp]
+
+type inet_addr = Unix.inet_addr
+
+let inet_addr_of_sexp sexp = string_of_sexp sexp |> Unix.inet_addr_of_string
+let sexp_of_inet_addr ia = Unix.string_of_inet_addr ia |> sexp_of_string
+
+type sockaddr = Unix.sockaddr =
+  | ADDR_UNIX of string
+  | ADDR_INET of inet_addr * int
+[@@deriving sexp]
+
+type addr_info = Unix.addr_info
+
 external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
-  (Unix.addr_info list, error) result
+  (addr_info list, error) result
   = "caml_local_getaddrinfo"

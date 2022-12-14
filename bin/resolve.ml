@@ -32,5 +32,3 @@ let () =
     Printf.fprintf stderr "%s\n%!" (Getaddrinfo.error_to_string e)
   | Ok candidates ->
     List.iter (fun c -> Printf.printf "%s\n%!" (ai_to_string c)) candidates
-  
-  
