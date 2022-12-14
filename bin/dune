@@ -1,0 +1,4 @@
+(executable
+ (name resolve)
+ (modules resolve)
+ (libraries getaddrinfo))

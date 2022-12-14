@@ -1,0 +1,7 @@
+(library
+ (name getaddrinfo)
+ (public_name getaddrinfo)
+ (foreign_stubs
+  (language c)
+  (names getaddrinfo_stubs))
+ (libraries unix str))
