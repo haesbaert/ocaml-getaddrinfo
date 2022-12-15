@@ -111,8 +111,8 @@ module Async = struct
         | Ok x -> Yay x
         | Error x -> Nay x
       in
-      Sexplib.Sexp.output_mach oc (sexp_of_res v);
-      Out_channel.close oc;
+      try Sexplib.Sexp.output_mach oc (sexp_of_res v) with _ -> ();
+      Out_channel.close_noerr oc;
       Unix._exit 0
     | pid ->   (* parent *)
       Unix.close w;
