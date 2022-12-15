@@ -69,8 +69,61 @@ type sockaddr = Unix.sockaddr =
   | ADDR_INET of inet_addr * int
 [@@deriving sexp]
 
-type addr_info = Unix.addr_info
+type addr_info = Unix.addr_info =
+  { ai_family : socket_domain;          (** Socket domain *)
+    ai_socktype : socket_type;          (** Socket type *)
+    ai_protocol : int;                  (** Socket protocol number *)
+    ai_addr : sockaddr;                 (** Address *)
+    ai_canonname : string               (** Canonical host name  *)
+  }
+[@@deriving sexp]
+
+let to_hum ai =
+  sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
+
+let to_hums ais =
+  sexp_of_list sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
 
 external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
   (addr_info list, error) result
   = "caml_local_getaddrinfo"
+
+module Async = struct
+
+  (* XXX There must be a better way to do this ? XXX *)
+  type res =
+    | Yay of addr_info list
+    | Nay of error
+  [@@deriving sexp]
+
+  let getaddrinfo ~(post_fork : (unit -> unit)) host service ops =
+    let r, w = Unix.pipe () in
+    match Unix.fork () with
+    | 0 ->     (* child *)
+      Unix.close r;
+      post_fork ();
+      let oc = Unix.out_channel_of_descr w in
+      let v = match getaddrinfo host service ops with
+        | Ok x -> Yay x
+        | Error x -> Nay x
+      in
+      Sexplib.Sexp.output_mach oc (sexp_of_res v);
+      Out_channel.close oc;
+      Unix._exit 0
+    | pid ->   (* parent *)
+      Unix.close w;
+      (pid, r)
+
+  let fetch r =
+    let ic = Unix.in_channel_of_descr r in
+    try
+      let x =
+        Fun.protect ~finally:(fun () -> In_channel.close_noerr ic)
+          (fun () -> Sexplib.Sexp.input_sexp ic)
+        |> res_of_sexp
+      in
+      match x with Yay x -> Ok x | Nay x -> Error x
+    with
+      End_of_file | Failure _ -> Error EAI_SYSTEM (* best bet *)
+
+end

@@ -1,5 +1,4 @@
-
-let ai_to_string (ai:Unix.addr_info) =
+let _ai_to_string (ai:Unix.addr_info) =
   let family = match ai.ai_family with
     | PF_UNIX  -> "AF_UNIX"
     | PF_INET  -> "AF_INET"
@@ -19,16 +18,28 @@ let ai_to_string (ai:Unix.addr_info) =
   let canonname = "\"\"" in
   Printf.sprintf "%s, %s, %s, %s, %s" family socktype protocol addr canonname
 
+let dump  = function
+  | Error e ->
+    Printf.fprintf stderr "%s\n%!" (Getaddrinfo.error_to_string e)
+  | Ok ail ->
+    List.iter (fun c -> Printf.printf "%s\n%!" (Getaddrinfo.to_hum c)) ail
+
 let usage () =
   Printf.fprintf stderr "usage: %s hostname\n%!" Sys.argv.(0);
   Unix._exit 1
 
-let () =
+let async () =
   if Array.length Sys.argv <> 2 then
     usage ();
   let hostname = Sys.argv.(1) in
-  match Getaddrinfo.getaddrinfo hostname "" [] with
-  | Error e ->
-    Printf.fprintf stderr "%s\n%!" (Getaddrinfo.error_to_string e)
-  | Ok candidates ->
-    List.iter (fun c -> Printf.printf "%s\n%!" (ai_to_string c)) candidates
+  let pid, r = Getaddrinfo.Async.getaddrinfo ~post_fork:(fun () -> ()) hostname "" [] in
+  Unix.waitpid [] pid |> ignore;
+  dump @@ Getaddrinfo.Async.fetch r
+
+let _sync () =
+  if Array.length Sys.argv <> 2 then
+    usage ();
+  let hostname = Sys.argv.(1) in
+  dump @@ Getaddrinfo.getaddrinfo hostname "" []
+
+let () = async ()
