@@ -46,12 +46,6 @@ module Unix = struct
     }
   [@@deriving sexp]
 
-  let to_hum ai =
-    sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
-
-  let to_hums ais =
-    sexp_of_list sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
-
 end
 
 (* keep in sync with C stubs *)
@@ -88,6 +82,12 @@ let error_to_string = function
   | EAI_SOCKTYPE   -> "ai_socktype not supported"
   | EAI_SYSTEM     -> "system error"
 
+let to_hum ai =
+  Unix.sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
+
+let to_hums ais =
+  sexp_of_list Unix.sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
+
 external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
   (Unix.addr_info list, error) result
   = "caml_local_getaddrinfo"
@@ -111,7 +111,9 @@ module Async = struct
         | Ok x -> Yay x
         | Error x -> Nay x
       in
-      try Sexplib.Sexp.output_mach oc (sexp_of_res v) with _ -> ();
+      let () =
+        try Sexplib.Sexp.output_mach oc (sexp_of_res v) with _ -> ()
+      in
       Out_channel.close_noerr oc;
       Unix._exit 0
     | pid ->   (* parent *)
