@@ -94,42 +94,77 @@ external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
 
 module Async = struct
 
-  (* XXX There must be a better way to do this ? *)
-  type res =
-    | Yay of Unix.addr_info list
-    | Nay of error
-  [@@deriving sexp]
+  module P = struct
+    (* XXX There must be a better way to do this ? *)
+    type res =
+      | Yay of Unix.addr_info list
+      | Nay of error
+    [@@deriving sexp]
 
-  let getaddrinfo ~(post_fork : (unit -> unit)) host service ops =
-    let r, w = Unix.pipe () in
-    match Unix.fork () with
-    | 0 ->     (* child *)
-      Unix.close r;
-      post_fork ();
-      let oc = Unix.out_channel_of_descr w in
-      let v = match getaddrinfo host service ops with
-        | Ok x -> Yay x
-        | Error x -> Nay x
-      in
-      let () =
-        try Sexplib.Sexp.output_mach oc (sexp_of_res v) with _ -> ()
-      in
-      Out_channel.close_noerr oc;
-      Unix._exit 0
-    | pid ->   (* parent *)
-      Unix.close w;
-      (pid, r)
+    type t = {
+      pid   : int;
+      rpipe : Unix.file_descr;
+    }
 
-  let fetch r =
-    let ic = Unix.in_channel_of_descr r in
-    try
-      let x =
-        Fun.protect ~finally:(fun () -> In_channel.close_noerr ic)
-          (fun () -> Sexplib.Sexp.input_sexp ic)
-        |> res_of_sexp
-      in
-      match x with Yay x -> Ok x | Nay x -> Error x
-    with
-      End_of_file | Failure _ -> Error EAI_SYSTEM (* best bet *)
+    let getaddrinfo ~(post_fork : (unit -> unit)) host service ops =
+      let rpipe, wpipe = Unix.pipe () in
+      match Unix.fork () with
+      | 0 ->     (* child *)
+        Unix.close rpipe;
+        post_fork ();
+        let oc = Unix.out_channel_of_descr wpipe in
+        let v = match getaddrinfo host service ops with
+          | Ok x -> Yay x
+          | Error x -> Nay x
+        in
+        let () =
+          try Sexplib.Sexp.output_mach oc (sexp_of_res v) with _ -> ()
+        in
+        Out_channel.close_noerr oc;
+        Unix._exit 0
+      | pid ->   (* parent *)
+        Unix.close wpipe;
+        { pid; rpipe }
 
+    let wait t =
+      let ic = Unix.in_channel_of_descr t.rpipe in
+      try
+        let x =
+          Fun.protect
+            ~finally:(fun () ->
+                In_channel.close_noerr ic;
+                Unix.waitpid [] t.pid |> ignore)
+            (fun () -> Sexplib.Sexp.input_sexp ic)
+          |> res_of_sexp
+        in
+        match x with Yay x -> Ok x | Nay x -> Error x
+      with
+        End_of_file | Failure _ -> Error EAI_SYSTEM (* best bet *)
+  end
+
+  module T = struct
+
+    type t = {
+      tid   : Thread.t;
+      rpipe : Unix.file_descr;
+      res   : ((Unix.addr_info list, error) result) option ref
+    }
+
+    let getaddrinfo host service ops =
+      let rpipe, wpipe = Unix.pipe () in
+      let res = ref None in
+      let tid =
+        Thread.create (fun res ->
+            res := Some (getaddrinfo host service ops);
+            Unix.close wpipe) res
+      in
+      { tid; rpipe; res }
+
+    let wait t =
+      let b = Bytes.create 1 in
+      assert ((Unix.read t.rpipe b 0 (Bytes.length b)) = 0);
+      Unix.close t.rpipe;
+      Thread.join t.tid;
+      Option.get !(t.res)
+  end
 end
