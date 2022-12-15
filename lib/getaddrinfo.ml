@@ -11,6 +11,49 @@
 (**************************************************************************)
 open Sexplib.Std
 
+module Unix = struct
+  include Unix
+
+  type socket_domain = Unix.socket_domain =
+    | PF_UNIX                     (** Unix domain *)
+    | PF_INET                     (** Internet domain (IPv4) *)
+    | PF_INET6                    (** Internet domain (IPv6) *)
+  [@@deriving sexp]
+
+  type socket_type = Unix.socket_type =
+    | SOCK_STREAM                (** Stream socket *)
+    | SOCK_DGRAM                  (** Datagram socket *)
+    | SOCK_RAW                    (** Raw socket *)
+    | SOCK_SEQPACKET              (** Sequenced packets socket *)
+  [@@deriving sexp]
+
+  type inet_addr = Unix.inet_addr
+
+  let inet_addr_of_sexp sexp = string_of_sexp sexp |> Unix.inet_addr_of_string
+  let sexp_of_inet_addr ia = Unix.string_of_inet_addr ia |> sexp_of_string
+
+  type sockaddr = Unix.sockaddr =
+    | ADDR_UNIX of string
+    | ADDR_INET of inet_addr * int
+  [@@deriving sexp]
+
+  type addr_info = Unix.addr_info =
+    { ai_family : socket_domain;          (** Socket domain *)
+      ai_socktype : socket_type;          (** Socket type *)
+      ai_protocol : int;                  (** Socket protocol number *)
+      ai_addr : sockaddr;                 (** Address *)
+      ai_canonname : string               (** Canonical host name  *)
+    }
+  [@@deriving sexp]
+
+  let to_hum ai =
+    sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
+
+  let to_hums ais =
+    sexp_of_list sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
+
+end
+
 (* keep in sync with C stubs *)
 type error =
   | EAI_ADDRFAMILY
@@ -45,54 +88,15 @@ let error_to_string = function
   | EAI_SOCKTYPE   -> "ai_socktype not supported"
   | EAI_SYSTEM     -> "system error"
 
-type socket_domain = Unix.socket_domain =
-  | PF_UNIX                     (** Unix domain *)
-  | PF_INET                     (** Internet domain (IPv4) *)
-  | PF_INET6                    (** Internet domain (IPv6) *)
-[@@deriving sexp]
-(* type socket_domain = [%import: Unix.socket_domain] [@@deriving sexp] *)
-
-type socket_type = Unix.socket_type =
-  | SOCK_STREAM                (** Stream socket *)
-  | SOCK_DGRAM                  (** Datagram socket *)
-  | SOCK_RAW                    (** Raw socket *)
-  | SOCK_SEQPACKET              (** Sequenced packets socket *)
-[@@deriving sexp]
-
-type inet_addr = Unix.inet_addr
-
-let inet_addr_of_sexp sexp = string_of_sexp sexp |> Unix.inet_addr_of_string
-let sexp_of_inet_addr ia = Unix.string_of_inet_addr ia |> sexp_of_string
-
-type sockaddr = Unix.sockaddr =
-  | ADDR_UNIX of string
-  | ADDR_INET of inet_addr * int
-[@@deriving sexp]
-
-type addr_info = Unix.addr_info =
-  { ai_family : socket_domain;          (** Socket domain *)
-    ai_socktype : socket_type;          (** Socket type *)
-    ai_protocol : int;                  (** Socket protocol number *)
-    ai_addr : sockaddr;                 (** Address *)
-    ai_canonname : string               (** Canonical host name  *)
-  }
-[@@deriving sexp]
-
-let to_hum ai =
-  sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
-
-let to_hums ais =
-  sexp_of_list sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
-
 external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
-  (addr_info list, error) result
+  (Unix.addr_info list, error) result
   = "caml_local_getaddrinfo"
 
 module Async = struct
 
-  (* XXX There must be a better way to do this ? XXX *)
+  (* XXX There must be a better way to do this ? *)
   type res =
-    | Yay of addr_info list
+    | Yay of Unix.addr_info list
     | Nay of error
   [@@deriving sexp]
 
