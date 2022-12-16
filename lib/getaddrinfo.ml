@@ -106,6 +106,9 @@ module Async = struct
       rpipe : Unix.file_descr;
     }
 
+    let pid_of_t t = t.pid
+    let fd_of_t t = t.rpipe
+
     let getaddrinfo ~(post_fork : (unit -> unit)) host service ops =
       let rpipe, wpipe = Unix.pipe () in
       match Unix.fork () with
@@ -149,6 +152,9 @@ module Async = struct
       rpipe : Unix.file_descr;
       res   : ((Unix.addr_info list, error) result) option ref
     }
+
+    let tid_of_t t = t.tid
+    let fd_of_t t = t.rpipe
 
     let getaddrinfo host service ops =
       let rpipe, wpipe = Unix.pipe () in
