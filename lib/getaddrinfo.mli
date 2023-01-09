@@ -1,3 +1,16 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*   Copyright 2022 Christiano Haesbaert                                  *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(** like the ones in getaddrinfo(3). *)
 type error =
   | EAI_ADDRFAMILY
   | EAI_AGAIN
@@ -15,13 +28,25 @@ type error =
   | EAI_SYSTEM
 
 val error_to_string : error -> string
+(** [error_to_string e] is like gai_strerror(3). *)
+
+val pp : Format.formatter -> Unix.addr_info -> unit
+(** is a pretty printer for {!Unix.addr_info}. *)
+
+val to_sexp : Unix.addr_info -> Sexplib0.Sexp.t
+(** is the sexp of {!Unix.addr_info}. *)
+
+val of_sexp : Sexplib0.Sexp.t -> Unix.addr_info
+(** is the [Unix.addr_info] of a sexp. *)
 
 val to_hum : Unix.addr_info -> string
+(** is the human readable sexp of {!Unix.addr_info} as a string. *)
 
-val to_hums : Unix.addr_info list -> string
-
-external getaddrinfo : string -> string -> Unix.getaddrinfo_option list -> (Unix.addr_info list, error) result
-  = "caml_local_getaddrinfo"
+val getaddrinfo :  string -> string -> Unix.getaddrinfo_option list ->
+  (Unix.addr_info list, error) result
+(** is like {!Unix.getaddrinfo} but returns a result instead. The
+    proper error from getaddrinfo(3) is returned in case of an error,
+    unlike the stdlib version where you only get an empty list. *)
 
 module Async : sig
 

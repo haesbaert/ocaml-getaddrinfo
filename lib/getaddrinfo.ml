@@ -82,11 +82,34 @@ let error_to_string = function
   | EAI_SOCKTYPE   -> "ai_socktype not supported"
   | EAI_SYSTEM     -> "system error"
 
+let to_sexp = Unix.sexp_of_addr_info
+
+let of_sexp = Unix.addr_info_of_sexp
+
 let to_hum ai =
   Unix.sexp_of_addr_info ai |> Sexplib.Sexp.to_string_hum
 
-let to_hums ais =
-  sexp_of_list Unix.sexp_of_addr_info ais |> Sexplib.Sexp.to_string_hum
+let pp ppf (ai:Unix.addr_info) =
+  let family = match ai.ai_family with
+    | PF_UNIX  -> "AF_UNIX"
+    | PF_INET  -> "AF_INET"
+    | PF_INET6 -> "AF_INET6"
+  in
+  let socktype = match ai.ai_socktype with
+    | SOCK_STREAM -> "SOCK_STREAM"
+    | SOCK_DGRAM -> "SOCK_DGRAM"
+    | SOCK_RAW -> "SOCK_RAW"
+    | SOCK_SEQPACKET -> "SOCK_SEQPACKET"
+  in
+  let protocol = string_of_int ai.ai_protocol in
+  let addr = match ai.ai_addr with
+    | ADDR_UNIX s -> s
+    | ADDR_INET (a, p) -> Unix.string_of_inet_addr a ^ ":" ^ (string_of_int p)
+  in
+  Format.fprintf ppf "@[%-8s@ %-11s@ %-2s@ %s@]" family socktype protocol addr
+
+let pps ppf ail =
+  List.iter (fun ai -> pp ppf ai; Format.pp_force_newline ppf ()) ail
 
 external getaddrinfo : string -> string -> Unix.getaddrinfo_option list ->
   (Unix.addr_info list, error) result
